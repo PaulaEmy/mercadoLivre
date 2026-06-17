@@ -454,115 +454,147 @@ def update_compra(cpf):
 def create_favoritos(cpf):
     mycolUser = db.usuario
     mycolProd = db.produtos
-    mycolComp = db.favoritos
+
     usuario = mycolUser.find_one({"cpf": cpf})
     if not usuario:
         print("Usuário não existe :(")
         return
+
+    favoritos = usuario.get("favoritos", [])
+
     key = ''
-    favoritos = []
-    while (key.upper() != 'N'):
+    while key.upper() != 'N':
         try:
-            id = input("Produto comprado (ID): ")
+            id = int(input("Produto favorito (ID): "))
         except:
             print("ID inválido :(")
             continue
-        produto = mycolProd.find_one({"id": int(id)})
+
+        produto = mycolProd.find_one({"id": id})
         if not produto:
             print("Produto não existe!")
             continue
-        favoritos.append({
-            "id": produto.get("id"),
-            "nomeProduto": produto.get("nomeProduto"),
-            "preco": produto.get("preco")
-        })
+
+        # Evita produtos duplicados
+        if any(p["id"] == id for p in favoritos):
+            print("Produto já está nos favoritos!")
+        else:
+            favoritos.append({
+                "id": produto.get("id"),
+                "nomeProduto": produto.get("nomeProduto"),
+                "preco": produto.get("preco")
+            })
+            print("Produto adicionado aos favoritos!")
+
         key = input("Adicionar mais produtos? (N para sair) ")
 
-    myDoc = {
-        "usuario": {
-            "cpf": usuario.get("cpf"),
-            "nome": usuario.get("nome")
-        },
-        "favoritos": favoritos
-    }
-    mycolComp.insert_one(myDoc)
-    print("\nLista de favoritos registrada com sucesso! $$\n")
+    mycolUser.update_one(
+        {"cpf": cpf},
+        {"$set": {"favoritos": favoritos}}
+    )
 
-### DELETE
-def delete_favorito(cpf):
-    global db
-    mycol = db.favoritos
-    result = mycol.delete_one({"usuario.cpf": cpf})
-    if result.deleted_count:
-        print("\nLista de favoritos deletada com sucesso :O\n")
-    else:
-        print("\nLista de favoritos não existe :/\n")
+    print("\nLista de favoritos atualizada com sucesso! :D\n")
 
 ### READ
 def read_favoritos(cpf):
-    global db
-    mycol = db.favoritos
+    mycolUser = db.usuario
+
     if not cpf:
-        mydoc = mycol.find().sort("usuario.cpf", 1)
+        usuarios = mycolUser.find().sort("nome")
     else:
-        mydoc = mycol.find({"usuario.cpf": cpf})
-    for x in mydoc:
-        usuario = x.get("usuario", {})
-        favoritos = x.get("favoritos", [])
-        print(f"Usuário: {usuario.get('nome')}")
+        usuarios = mycolUser.find({"cpf": cpf})
+
+    for usuario in usuarios:
+        print(f"\nUsuário: {usuario.get('nome')}")
         print(f"CPF: {usuario.get('cpf')}")
-        for p in favoritos:
-            print(f"ID: {p.get('id')}")
-            print(f"Nome: {p.get('nomeProduto')}")
-            print(f"Preço: {p.get('preco')}")
+
+        favoritos = usuario.get("favoritos", [])
+
+        if not favoritos:
+            print("Nenhum favorito cadastrado :/")
+        else:
+            print("FAVORITOS")
+            for p in favoritos:
+                print(f"ID: {p.get('id')}")
+                print(f"Nome: {p.get('nomeProduto')}")
+                print(f"Preço: {p.get('preco')}")
+
+### DELETE
+def delete_favorito(cpf):
+    mycolUser = db.usuario
+
+    resultado = mycolUser.update_one(
+        {"cpf": cpf},
+        {"$set": {"favoritos": []}}
+    )
+
+    if resultado.matched_count:
+        print("\nLista de favoritos apagada com sucesso! :O\n")
+    else:
+        print("\nUsuário não encontrado :/\n")
  
 ### UPDATE
 def update_favoritos(cpf):
-    global db
-    mycol = db.favoritos
-    favoritos = mycol.find_one({"usuario.cpf": cpf})
-    if not favoritos:
-        print("\nLista não encontrada\n")
+    mycolUser = db.usuario
+
+    usuario = mycolUser.find_one({"cpf": cpf})
+    if not usuario:
+        print("\nUsuário não encontrado!\n")
         return
-    produtos = favoritos.get("favoritos", [])
+
+    favoritos = usuario.get("favoritos", [])
+
     opc = ''
     while opc.upper() != 'N':
-        print("1 - Adicionar Produto (N para sair)")
+        print("\n1 - Adicionar Produto")
         print("2 - Remover Produto")
-        opc = input("Selecione um opção: ")
+        print("N - Sair")
+
+        opc = input("Selecione uma opção: ")
+
         if opc == '1':
             try:
                 produto_id = int(input("ID do produto: "))
             except:
-                print("Produto não existe! :O")
+                print("ID inválido!")
                 continue
+
             prod = db.produtos.find_one({"id": produto_id})
             if not prod:
-                print("Produto não existe! :O")
+                print("Produto não existe!")
+            elif any(p["id"] == produto_id for p in favoritos):
+                print("Produto já está nos favoritos!")
             else:
-                produtos.append({
+                favoritos.append({
                     "id": prod.get("id"),
                     "nomeProduto": prod.get("nomeProduto"),
                     "preco": prod.get("preco")
                 })
-                print("\nProduto adicionado a lista :D!\n")
+                print("Produto adicionado!")
+
         elif opc == '2':
-            if not produtos:
+            if not favoritos:
                 print("Lista vazia :/")
                 continue
+
             print("\nProdutos na lista:")
-            for i, p in enumerate(produtos):
+            for i, p in enumerate(favoritos):
                 print(f"{i} - {p.get('nomeProduto')}")
+
             try:
                 indice = int(input("Selecione um produto: "))
-                if 0 <= indice < len(produtos):
-                    removido = produtos.pop(indice)
-                    print("Produto removido! :O")
+                if 0 <= indice < len(favoritos):
+                    removido = favoritos.pop(indice)
+                    print(f"{removido.get('nomeProduto')} removido!")
                 else:
-                    print("Produto inválido! :(")
+                    print("Produto inválido!")
             except:
-                print("Produto inválido! :(")
-        mycol.update_one({"usuario.cpf": cpf}, {"$set": {"favoritos": produtos}})
+                print("Produto inválido!")
+
+    mycolUser.update_one(
+        {"cpf": cpf},
+        {"$set": {"favoritos": favoritos}}
+    )
 
     print("\nAtualização bem sucedida!")
   
